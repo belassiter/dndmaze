@@ -29,7 +29,11 @@ jobs:
         password: ${{ secrets.FTP_PASSWORD }}
         # local-dir: ./ # Optional: defaults to the repository root
         server-dir: public_html/ # Optional: defaults to the server root
-        # 👇 This is the new line that prevents deletions.
-        # It tells the action to not delete any files on the server.
-        # The '**' is a glob pattern that matches everything.
-        exclude: '**'
+        # 👇 This section prevents deletions and excludes specific files.
+        # - '**' prevents any files from being deleted on the server.
+        # - 'README.md' and 'LICENSE' will not be uploaded.
+        exclude: |
+          **
+          README.md
+          LICENSE
+
