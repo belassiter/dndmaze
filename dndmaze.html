@@ -101,8 +101,33 @@
     <div id="main-ui" class="hidden w-full max-w-5xl">
         <h1 class="text-2xl md:text-4xl text-yellow-400 tracking-wider mb-4 text-center">DnD's Maze Runner</h1>
         <div class="flex flex-col md:flex-row items-center md:items-start justify-center">
-            <div id="game-container" class="border-4 border-blue-500 shadow-lg shadow-blue-500/50">
-                <canvas id="gameCanvas"></canvas>
+            <!-- Game and D-Pad Wrapper -->
+            <div class="flex flex-col items-center">
+                <div id="game-container" class="border-4 border-blue-500 shadow-lg shadow-blue-500/50">
+                    <canvas id="gameCanvas"></canvas>
+                </div>
+                 <!-- D-pad for Mobile -->
+                <div id="d-pad-container" class="hidden md:hidden mt-4">
+                    <div class="flex justify-center">
+                        <button id="up-btn" class="d-pad-btn rounded-full">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="m18 15-6-6-6 6"/></svg>
+                        </button>
+                    </div>
+                    <div class="flex justify-center items-center my-2">
+                        <button id="left-btn" class="d-pad-btn rounded-full">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6"/></svg>
+                        </button>
+                        <div class="w-16 h-16"></div> <!-- Spacer -->
+                        <button id="right-btn" class="d-pad-btn rounded-full">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg>
+                        </button>
+                    </div>
+                    <div class="flex justify-center">
+                        <button id="down-btn" class="d-pad-btn rounded-full">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>
+                        </button>
+                    </div>
+                </div>
             </div>
             <div id="scoreboard" class="mt-4 md:mt-0 md:ml-8 text-left text-base leading-7 w-full max-w-[620px] md:w-72 p-4 border-4 border-gray-600">
                 <div id="alltime-highscore-display" class="text-red-400 mb-4">ALL-TIME HIGH:<br>0 ---</div>
@@ -113,22 +138,6 @@
         </div>
         <p id="instructions" class="mt-4 text-sm text-center">Use ARROW KEYS to move!</p>
     </div>
-
-    <!-- D-pad for Mobile -->
-    <div id="d-pad-container" class="hidden mt-4">
-        <div class="flex justify-center">
-            <button id="up-btn" class="d-pad-btn rounded-full">?</button>
-        </div>
-        <div class="flex justify-center items-center my-2">
-            <button id="left-btn" class="d-pad-btn rounded-full">?</button>
-            <div class="w-16 h-16"></div> <!-- Spacer -->
-            <button id="right-btn" class="d-pad-btn rounded-full">?</button>
-        </div>
-        <div class="flex justify-center">
-            <button id="down-btn" class="d-pad-btn rounded-full">?</button>
-        </div>
-    </div>
-
 
     <!-- Modals -->
     <div id="winModal" class="modal-backdrop hidden">
