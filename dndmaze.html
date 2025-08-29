@@ -576,13 +576,23 @@
             updateDisplays();
         }
 
-        function submitNewHighScore() {
+        async function submitNewHighScore() {
             const initials = initialsInput.value.trim().toUpperCase().substring(0, 3) || "AAA";
-
-            allTimeHighScore = totalScore;
-            allTimeHighInitials = initials;
-            highScoreRef.set({ score: allTimeHighScore, initials: allTimeHighInitials });
             
+            try {
+                await db.runTransaction(async (transaction) => {
+                    const doc = await transaction.get(highScoreRef);
+                    const currentHighScore = doc.data()?.score || 0;
+                    if (totalScore > currentHighScore) {
+                        transaction.update(highScoreRef, { score: totalScore, initials: initials });
+                        allTimeHighScore = totalScore;
+                        allTimeHighInitials = initials;
+                    }
+                });
+            } catch (e) {
+                console.error("Transaction failed: ", e);
+            }
+
             initialsModal.classList.add('hidden');
             winModal.classList.remove('hidden');
             updateDisplays();
