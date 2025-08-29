@@ -88,6 +88,13 @@
         .d-pad-btn:active {
             background-color: rgba(255, 255, 255, 0.3);
         }
+        /* Difficulty Toggle Styles */
+        .switch { position: relative; display: inline-block; width: 60px; height: 34px; }
+        .switch input { opacity: 0; width: 0; height: 0; }
+        .slider { position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background-color: #4CAF50; border: 2px solid #fff; transition: .4s; }
+        .slider:before { position: absolute; content: ""; height: 22px; width: 22px; left: 4px; bottom: 4px; background-color: white; transition: .4s; }
+        input:checked + .slider { background-color: #ff4136; }
+        input:checked + .slider:before { transform: translateX(26px); }
     </style>
 </head>
 <body class="bg-gray-900 text-white flex flex-col justify-center items-center min-h-screen p-2">
@@ -131,6 +138,14 @@
                 </div>
             </div>
             <div id="scoreboard" class="mt-4 md:mt-0 md:ml-8 text-left text-sm md:text-base leading-7 w-full max-w-[320px] md:w-72 p-4 border-4 border-gray-600">
+                <div class="flex justify-between items-center mb-4">
+                    <span id="easy-label" class="text-green-400">EASY</span>
+                    <label class="switch">
+                        <input type="checkbox" id="difficulty-toggle">
+                        <span class="slider"></span>
+                    </label>
+                    <span id="hard-label" class="text-gray-500">HARD</span>
+                </div>
                 <div id="alltime-highscore-display" class="text-red-400 mb-4">ALL-TIME HIGH:<br>0 ---</div>
                 <div id="session-highscore-display" class="text-green-400 mb-4">SESSION HIGH:<br>0</div>
                 <div id="current-score-display" class="text-white mb-4">CURRENT GAME:<br>0</div>
@@ -209,22 +224,32 @@
         const downBtn = document.getElementById('down-btn');
         const leftBtn = document.getElementById('left-btn');
         const rightBtn = document.getElementById('right-btn');
+        const difficultyToggle = document.getElementById('difficulty-toggle');
+        const easyLabel = document.getElementById('easy-label');
+        const hardLabel = document.getElementById('hard-label');
 
         // --- Audio Synths (Tone.js) ---
         let soundsReady = false;
-        // FIX: Use PolySynth for player move sound to handle rapid re-triggering
-        const playerMoveSynth = new Tone.PolySynth(Tone.Synth, {
-            oscillator: { type: 'sine' },
-            volume: -12,
-            envelope: { attack: 0.01, decay: 0.1, sustain: 0, release: 0.1 }
-        }).toDestination();
+        const playerMoveSynth = new Tone.PolySynth(Tone.Synth, { oscillator: { type: 'sine' }, volume: -12, envelope: { attack: 0.01, decay: 0.1, sustain: 0, release: 0.1 } }).toDestination();
         const enemyMoveSynth = new Tone.Synth({ oscillator: { type: 'fatsawtooth' }, volume: -Infinity, envelope: { attack: 0.01, decay: 0.2, sustain: 0, release: 0.1 } }).toDestination();
         const defeatSynth = new Tone.PolySynth(Tone.Synth, { oscillator: { type: 'sine' }, volume: -8 }).toDestination();
         const victorySynth = new Tone.Synth({ oscillator: { type: 'triangle' }, volume: -10 }).toDestination();
+        // FIX: Use Tone.Part for crackle-free playback on desktop
+        const victoryPart = new Tone.Part((time, note) => {
+            victorySynth.triggerAttackRelease(note.name, note.duration, time);
+        }, [
+            { time: "0:0", name: "C4", duration: "16n" },
+            { time: "0:0:2", name: "E4", duration: "16n" },
+            { time: "0:1", name: "G4", duration: "16n" },
+            { time: "0:1:2", name: "C5", duration: "16n" },
+            { time: "0:2", name: "E5", duration: "16n" },
+            { time: "0:2:2", name: "G5", duration: "16n" },
+            { time: "0:3", name: "C6", duration: "16n" }
+        ]).start(0);
+        victoryPart.loop = false;
 
         // --- Game Configuration ---
         let TILE_SIZE = 20;
-        const ENEMY_MOVE_INTERVAL = 1000;
         const MAZE_WIDTH = 31;
         const MAZE_HEIGHT = 31;
         const WALL_REMOVAL_PERCENTAGE = 0.22;
@@ -244,6 +269,9 @@
         let gameActive = true;
         let hasPlayerMoved = false;
         let enemyMoveTimer;
+        let enemyMoveInterval = 1000;
+        let speedUpInterval;
+        let difficulty = 'easy';
 
         function generateMaze(width, height) {
             let maze = Array(height).fill(null).map(() => Array(width).fill(1));
@@ -368,7 +396,7 @@
                         possibleScore--;
                         updateDisplays();
                     }, 1000);
-                    enemyMoveTimer = setInterval(moveEnemies, ENEMY_MOVE_INTERVAL);
+                    startEnemyTimers();
                 }
                 
                 possibleScore--;
@@ -376,6 +404,26 @@
                 checkCollisions();
             }
             drawGame();
+        }
+
+        function startEnemyTimers() {
+            clearInterval(enemyMoveTimer);
+            enemyMoveTimer = setInterval(moveEnemies, enemyMoveInterval);
+
+            if (difficulty === 'hard') {
+                clearInterval(speedUpInterval);
+                speedUpInterval = setInterval(speedUpEnemies, 5000);
+            }
+        }
+
+        function speedUpEnemies() {
+            if (enemyMoveInterval > 250) { // Max speed of 4 moves/sec
+                enemyMoveInterval -= 100;
+                startEnemyTimers(); // Restart main timer with new speed
+            } else {
+                enemyMoveInterval = 250;
+                clearInterval(speedUpInterval); // Reached max speed
+            }
         }
 
         function findShortestPath(start, end) {
@@ -464,6 +512,7 @@
             gameActive = false;
             clearInterval(enemyMoveTimer);
             clearInterval(timePenaltyInterval);
+            clearInterval(speedUpInterval);
 
             // Add score to ledger and calculate percentile
             await ledgerRef.add({ score: totalScore });
@@ -478,15 +527,12 @@
 
         function levelComplete() {
             if(soundsReady) {
-                const now = Tone.now();
-                const notes = ['C4', 'E4', 'G4', 'C5', 'E5', 'G5', 'C6'];
-                notes.forEach((note, index) => {
-                    victorySynth.triggerAttackRelease(note, '16n', now + index * 0.1);
-                });
+                Tone.Transport.start();
             }
             gameActive = false;
             clearInterval(enemyMoveTimer);
             clearInterval(timePenaltyInterval);
+            clearInterval(speedUpInterval);
             
             totalScore += possibleScore > 0 ? possibleScore : 0;
             levelCompleteMessage.textContent = `You completed Level ${level}!`;
@@ -547,6 +593,7 @@
         }
 
         function startLevel() {
+            Tone.Transport.stop(); // Stop any previous victory music
             MAZE = generateMaze(MAZE_WIDTH, MAZE_HEIGHT);
             calculateTileSizeAndResize();
             
@@ -555,6 +602,7 @@
             gameActive = true;
             hasPlayerMoved = false;
             possibleScore = 1000;
+            enemyMoveInterval = 1000; // Reset speed
             
             updateDisplays();
             spawnEnemies();
@@ -567,6 +615,7 @@
             
             clearInterval(enemyMoveTimer);
             clearInterval(timePenaltyInterval);
+            clearInterval(speedUpInterval);
         }
         
         function resetGame() {
@@ -639,6 +688,21 @@
             nextLevelBtn.addEventListener('click', startLevel);
             playAgainBtn.addEventListener('click', resetGame);
             submitInitialsBtn.addEventListener('click', submitNewHighScore);
+            difficultyToggle.addEventListener('change', (e) => {
+                if (e.target.checked) {
+                    difficulty = 'hard';
+                    hardLabel.classList.remove('text-gray-500');
+                    hardLabel.classList.add('text-red-400');
+                    easyLabel.classList.remove('text-green-400');
+                    easyLabel.classList.add('text-gray-500');
+                } else {
+                    difficulty = 'easy';
+                    easyLabel.classList.remove('text-gray-500');
+                    easyLabel.classList.add('text-green-400');
+                    hardLabel.classList.remove('text-red-400');
+                    hardLabel.classList.add('text-gray-500');
+                }
+            });
 
             document.addEventListener('keydown', handleKeyDown);
             
