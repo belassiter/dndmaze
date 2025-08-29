@@ -1,0 +1,617 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>DnD's Maze Runner</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Include Tone.js for audio synthesis -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.7.77/Tone.js"></script>
+    <!-- Firebase Libraries (using compat for easier integration in single file) -->
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
+
+    <style>
+        body {
+            font-family: 'Press Start 2P', cursive;
+            touch-action: manipulation; /* Prevents double-tap zoom on mobile */
+        }
+        /* Custom modal styles for a retro look */
+        .modal-backdrop {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0,0,0,0.7);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+        }
+        .modal-content {
+            background-color: #1a1a1a;
+            border: 4px solid #fff;
+            padding: 2rem;
+            text-align: center;
+            color: #fff;
+            box-shadow: 0 0 0 4px #1a1a1a;
+        }
+        .modal-button {
+            background-color: #4CAF50;
+            border: 2px solid #fff;
+            color: white;
+            padding: 10px 20px;
+            text-align: center;
+            text-decoration: none;
+            display: inline-block;
+            font-size: 16px;
+            margin-top: 20px;
+            cursor: pointer;
+            image-rendering: pixelated; /* Keeps the pixelated look when scaled */
+        }
+        .modal-button:hover {
+            background-color: #45a049;
+        }
+        .modal-info {
+            font-size: 0.8rem;
+            color: #aaa;
+            margin-top: 1rem;
+        }
+        #initials-input {
+            background-color: #333;
+            border: 2px solid #fff;
+            color: #fff;
+            text-align: center;
+            font-family: 'Press Start 2P', cursive;
+            width: 100px;
+            font-size: 20px;
+            text-transform: uppercase;
+            margin-top: 1rem;
+        }
+        .d-pad-btn {
+            width: 60px;
+            height: 60px;
+            background-color: rgba(255, 255, 255, 0.15);
+            border: 2px solid white;
+            color: white;
+            font-size: 24px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            user-select: none; /* Prevent text selection on tap */
+        }
+        .d-pad-btn:active {
+            background-color: rgba(255, 255, 255, 0.3);
+        }
+    </style>
+</head>
+<body class="bg-gray-900 text-white flex flex-col justify-center items-center min-h-screen p-2">
+
+    <div id="start-screen" class="modal-backdrop cursor-pointer">
+        <div class="text-center">
+            <h1 class="text-4xl md:text-5xl text-yellow-400 mb-8">DnD's Maze Runner</h1>
+            <p class="text-2xl text-white animate-pulse">Click to Start</p>
+        </div>
+    </div>
+    
+    <div id="main-ui" class="hidden w-full max-w-5xl">
+        <h1 class="text-2xl md:text-4xl text-yellow-400 tracking-wider mb-4 text-center">DnD's Maze Runner</h1>
+        <div class="flex flex-col md:flex-row items-center md:items-start justify-center">
+            <div id="game-container" class="border-4 border-blue-500 shadow-lg shadow-blue-500/50">
+                <canvas id="gameCanvas"></canvas>
+            </div>
+            <div id="scoreboard" class="mt-4 md:mt-0 md:ml-8 text-left text-base leading-7 w-full max-w-[620px] md:w-72 p-4 border-4 border-gray-600">
+                <div id="alltime-highscore-display" class="text-red-400 mb-4">ALL-TIME HIGH:<br>0 ---</div>
+                <div id="session-highscore-display" class="text-green-400 mb-4">SESSION HIGH:<br>0</div>
+                <div id="current-score-display" class="text-white mb-4">CURRENT GAME:<br>0</div>
+                <div id="level-score-display" class="text-cyan-400">LEVEL 1:<br>1000</div>
+            </div>
+        </div>
+        <p id="instructions" class="mt-4 text-sm text-center">Use ARROW KEYS to move!</p>
+    </div>
+
+    <!-- D-pad for Mobile -->
+    <div id="d-pad-container" class="hidden mt-4">
+        <div class="flex justify-center">
+            <button id="up-btn" class="d-pad-btn rounded-full">?</button>
+        </div>
+        <div class="flex justify-center items-center my-2">
+            <button id="left-btn" class="d-pad-btn rounded-full">?</button>
+            <div class="w-16 h-16"></div> <!-- Spacer -->
+            <button id="right-btn" class="d-pad-btn rounded-full">?</button>
+        </div>
+        <div class="flex justify-center">
+            <button id="down-btn" class="d-pad-btn rounded-full">?</button>
+        </div>
+    </div>
+
+
+    <!-- Modals -->
+    <div id="winModal" class="modal-backdrop hidden">
+        <div class="modal-content">
+            <h2 class="text-2xl text-green-400 mb-4">LEVEL COMPLETE!</h2>
+            <p id="level-complete-message">You completed Level 1!</p>
+            <button id="nextLevelBtn" class="modal-button">Next Level</button>
+            <p class="modal-info">(Press ENTER)</p>
+        </div>
+    </div>
+    <div id="gameOverModal" class="modal-backdrop hidden">
+        <div class="modal-content">
+            <h2 class="text-2xl text-red-500 mb-4">GAME OVER</h2>
+            <p>The maze guardians got you!</p>
+            <button id="playAgainBtn" class="modal-button">Play Again</button>
+            <p class="modal-info">(Press ENTER)</p>
+        </div>
+    </div>
+    <div id="initialsModal" class="modal-backdrop hidden">
+        <div class="modal-content">
+            <h2 class="text-2xl text-yellow-400 mb-2">NEW ALL-TIME HIGH!</h2>
+            <p>Enter your initials (3 letters):</p>
+            <input type="text" id="initials-input" maxlength="3">
+            <button id="submitInitialsBtn" class="modal-button">Submit</button>
+            <p class="modal-info">(Press ENTER)</p>
+        </div>
+    </div>
+
+
+    <script>
+        // --- Firebase Setup ---
+        const firebaseConfig = {
+            apiKey: "AIzaSyBLr3N3cLomRU7IF7FbgNoDxOiSwwyAlds",
+            authDomain: "dnd-maze.firebaseapp.com",
+            projectId: "dnd-maze",
+            storageBucket: "dnd-maze.appspot.com",
+            messagingSenderId: "353228609983",
+            appId: "1:353228609983:web:928cc5de4ce504e319e90a",
+            measurementId: "G-BY8LS01WGM"
+        };
+        firebase.initializeApp(firebaseConfig);
+        const db = firebase.firestore();
+        const highScoreRef = db.collection("scores").doc("globalHighScore");
+
+        // --- DOM Elements ---
+        const startScreen = document.getElementById('start-screen');
+        const mainUI = document.getElementById('main-ui');
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        const instructions = document.getElementById('instructions');
+        const levelScoreDisplay = document.getElementById('level-score-display');
+        const currentScoreDisplay = document.getElementById('current-score-display');
+        const sessionHighscoreDisplay = document.getElementById('session-highscore-display');
+        const alltimeHighscoreDisplay = document.getElementById('alltime-highscore-display');
+        const winModal = document.getElementById('winModal');
+        const levelCompleteMessage = document.getElementById('level-complete-message');
+        const nextLevelBtn = document.getElementById('nextLevelBtn');
+        const gameOverModal = document.getElementById('gameOverModal');
+        const playAgainBtn = document.getElementById('playAgainBtn');
+        const initialsModal = document.getElementById('initialsModal');
+        const initialsInput = document.getElementById('initials-input');
+        const submitInitialsBtn = document.getElementById('submitInitialsBtn');
+        const dPadContainer = document.getElementById('d-pad-container');
+        const upBtn = document.getElementById('up-btn');
+        const downBtn = document.getElementById('down-btn');
+        const leftBtn = document.getElementById('left-btn');
+        const rightBtn = document.getElementById('right-btn');
+
+        // --- Audio Synths (Tone.js) ---
+        let soundsReady = false;
+        const playerMoveSynth = new Tone.Synth({ oscillator: { type: 'sine' }, volume: -12, envelope: { attack: 0.01, decay: 0.1, sustain: 0, release: 0.1 } }).toDestination();
+        const enemyMoveSynth = new Tone.Synth({ oscillator: { type: 'fatsawtooth' }, volume: -Infinity, envelope: { attack: 0.01, decay: 0.2, sustain: 0, release: 0.1 } }).toDestination();
+        const defeatSynth = new Tone.PolySynth(Tone.Synth, { oscillator: { type: 'sine' }, volume: -8 }).toDestination();
+        const victorySynth = new Tone.Synth({ oscillator: { type: 'triangle' }, volume: -10 }).toDestination();
+
+        // --- Game Configuration ---
+        const TILE_SIZE = 20;
+        const ENEMY_MOVE_INTERVAL = 1000;
+        const MAZE_WIDTH = 31;
+        const MAZE_HEIGHT = 31;
+        const WALL_REMOVAL_PERCENTAGE = 0.22;
+
+        // --- Game State ---
+        let MAZE;
+        let player = { x: 1, y: 1 };
+        let goal = { x: MAZE_WIDTH - 2, y: MAZE_HEIGHT - 2 };
+        let enemies = [];
+        let level = 1;
+        let totalScore = 0;
+        let possibleScore = 1000;
+        let timePenaltyInterval;
+        let sessionHighScore = 0;
+        let allTimeHighScore = 0;
+        let allTimeHighInitials = "AAA";
+        let gameActive = true;
+        let hasPlayerMoved = false;
+        let enemyMoveTimer;
+
+        function generateMaze(width, height) {
+            let maze = Array(height).fill(null).map(() => Array(width).fill(1));
+            const stack = [];
+            let current = { x: 1, y: 1 };
+            maze[current.y][current.x] = 0;
+            stack.push(current);
+
+            while (stack.length > 0) {
+                current = stack[stack.length - 1];
+                const neighbors = [];
+                const directions = [[0, -2], [0, 2], [-2, 0], [2, 0]];
+                for (const [dx, dy] of directions) {
+                    const nx = current.x + dx;
+                    const ny = current.y + dy;
+                    if (ny > 0 && ny < height - 1 && nx > 0 && nx < width - 1 && maze[ny][nx] === 1) {
+                        neighbors.push({ x: nx, y: ny, dx, dy });
+                    }
+                }
+
+                if (neighbors.length > 0) {
+                    const next = neighbors[Math.floor(Math.random() * neighbors.length)];
+                    maze[next.y][next.x] = 0;
+                    maze[current.y + next.dy / 2][current.x + next.dx / 2] = 0;
+                    stack.push({ x: next.x, y: next.y });
+                } else {
+                    stack.pop();
+                }
+            }
+            
+            addExtraPaths(maze);
+            maze[height - 2][width - 2] = 2;
+            return maze;
+        }
+
+        function addExtraPaths(maze) {
+            for (let y = 1; y < 5; y++) {
+                for (let x = 1; x < 5; x++) {
+                    if (maze[y][x] === 1 && Math.random() > 0.5) {
+                        maze[y][x] = 0;
+                    }
+                }
+            }
+
+            const internalWalls = [];
+            for (let y = 1; y < MAZE_HEIGHT - 1; y++) {
+                for (let x = 1; x < MAZE_WIDTH - 1; x++) {
+                    if (maze[y][x] === 1) {
+                        internalWalls.push({x, y});
+                    }
+                }
+            }
+            
+            const wallsToRemove = Math.floor(internalWalls.length * WALL_REMOVAL_PERCENTAGE);
+            for (let i = 0; i < wallsToRemove; i++) {
+                if (internalWalls.length > 0) {
+                    const randIndex = Math.floor(Math.random() * internalWalls.length);
+                    const wall = internalWalls.splice(randIndex, 1)[0];
+                    maze[wall.y][wall.x] = 0;
+                }
+            }
+        }
+
+        function setCanvasSize() {
+            canvas.width = MAZE[0].length * TILE_SIZE;
+            canvas.height = MAZE.length * TILE_SIZE;
+        }
+
+        function drawGame() {
+            ctx.fillStyle = '#1a1a1a';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            for (let row = 0; row < MAZE.length; row++) {
+                for (let col = 0; col < MAZE[row].length; col++) {
+                    const tile = MAZE[row][col];
+                    if (tile === 1) { ctx.fillStyle = '#007acc'; } 
+                    else if (tile === 2) { ctx.fillStyle = '#4CAF50'; }
+                    else { continue; }
+                    ctx.fillRect(col * TILE_SIZE, row * TILE_SIZE, TILE_SIZE, TILE_SIZE);
+                }
+            }
+            
+            ctx.fillStyle = '#ff4136';
+            enemies.forEach(enemy => {
+                ctx.fillRect(enemy.x * TILE_SIZE, enemy.y * TILE_SIZE, TILE_SIZE, TILE_SIZE);
+            });
+
+            ctx.fillStyle = '#ffff00';
+            ctx.fillRect(player.x * TILE_SIZE, player.y * TILE_SIZE, TILE_SIZE, TILE_SIZE);
+        }
+
+        function movePlayer(dx, dy) {
+            if (!gameActive) return;
+
+            const newX = player.x + dx;
+            const newY = player.y + dy;
+
+            if (MAZE[newY] && MAZE[newY][newX] !== 1) {
+                if(soundsReady) playerMoveSynth.triggerAttackRelease('C5', '16n');
+                player.x = newX;
+                player.y = newY;
+                
+                if (!hasPlayerMoved) {
+                    hasPlayerMoved = true;
+                    timePenaltyInterval = setInterval(() => {
+                        possibleScore--;
+                        updateDisplays();
+                    }, 1000);
+                    enemyMoveTimer = setInterval(moveEnemies, ENEMY_MOVE_INTERVAL);
+                }
+                
+                possibleScore--;
+                updateDisplays();
+                checkCollisions();
+            }
+            drawGame();
+        }
+
+        function findShortestPath(start, end) {
+            const queue = [[start]];
+            const visited = new Set([`${start.x},${start.y}`]);
+
+            while (queue.length > 0) {
+                const path = queue.shift();
+                const pos = path[path.length - 1];
+
+                if (pos.x === end.x && pos.y === end.y) {
+                    return path.length > 1 ? path[1] : null;
+                }
+
+                const moves = [[0, 1], [0, -1], [1, 0], [-1, 0]];
+                for (const move of moves) {
+                    const [dx, dy] = move;
+                    const nextPos = { x: pos.x + dx, y: pos.y + dy };
+
+                    if (
+                        MAZE[nextPos.y] && MAZE[nextPos.y][nextPos.x] !== 1 &&
+                        !visited.has(`${nextPos.x},${nextPos.y}`)
+                    ) {
+                        visited.add(`${nextPos.x},${nextPos.y}`);
+                        queue.push([...path, nextPos]);
+                    }
+                }
+            }
+            return null;
+        }
+        
+        function triggerProximitySound() {
+            if (!soundsReady || enemies.length === 0) return;
+
+            let minDistance = Infinity;
+            enemies.forEach(enemy => {
+                const distance = Math.abs(enemy.x - player.x) + Math.abs(enemy.y - player.y);
+                if (distance < minDistance) {
+                    minDistance = distance;
+                }
+            });
+
+            let newVolume = -Infinity;
+            if (minDistance <= 2) { newVolume = -2; } 
+            else if (minDistance <= 5) { newVolume = -8; } 
+            else if (minDistance <= 10) { newVolume = -14; } 
+            else if (minDistance <= 20) { newVolume = -20; }
+            
+            enemyMoveSynth.volume.rampTo(newVolume, 0.1);
+            if (newVolume > -Infinity) {
+                enemyMoveSynth.triggerAttackRelease('G1', '8n');
+            }
+        }
+
+        function moveEnemies() {
+            if (!gameActive) return;
+            
+            enemies.forEach(enemy => {
+                const nextMove = findShortestPath({x: enemy.x, y: enemy.y}, player);
+                if (nextMove) {
+                    enemy.x = nextMove.x;
+                    enemy.y = nextMove.y;
+                }
+            });
+            
+            triggerProximitySound();
+            checkCollisions();
+            drawGame();
+        }
+
+        function checkCollisions() {
+            if (enemies.some(enemy => enemy.x === player.x && enemy.y === player.y)) {
+                gameOver();
+                return;
+            }
+            if (player.x === goal.x && player.y === goal.y) {
+                levelComplete();
+            }
+        }
+        
+        function gameOver() {
+            if(soundsReady) {
+                const now = Tone.now();
+                defeatSynth.triggerAttackRelease(['C3', 'D#3', 'G3'], '4n', now);
+            }
+            gameActive = false;
+            clearInterval(enemyMoveTimer);
+            clearInterval(timePenaltyInterval);
+            gameOverModal.classList.remove('hidden');
+        }
+
+        function levelComplete() {
+            if(soundsReady) {
+                const now = Tone.now();
+                const notes = ['C4', 'E4', 'G4', 'C5', 'E5', 'G5', 'C6'];
+                notes.forEach((note, index) => {
+                    victorySynth.triggerAttackRelease(note, '16n', now + index * 0.1);
+                });
+            }
+            gameActive = false;
+            clearInterval(enemyMoveTimer);
+            clearInterval(timePenaltyInterval);
+            
+            totalScore += possibleScore > 0 ? possibleScore : 0;
+            levelCompleteMessage.textContent = `You completed Level ${level}!`;
+            level++;
+            
+            if (totalScore > sessionHighScore) {
+                sessionHighScore = totalScore;
+                localStorage.setItem('mazeSessionHighScore', sessionHighScore);
+            }
+
+            if (totalScore > allTimeHighScore) {
+                initialsModal.classList.remove('hidden');
+                initialsInput.focus();
+            } else {
+                winModal.classList.remove('hidden');
+            }
+            
+            updateDisplays();
+        }
+
+        function submitNewHighScore() {
+            const initials = initialsInput.value.trim().toUpperCase().substring(0, 3);
+            if (initials.length < 1) return; // Don't submit empty initials
+
+            allTimeHighScore = totalScore;
+            allTimeHighInitials = initials;
+            highScoreRef.set({ score: allTimeHighScore, initials: allTimeHighInitials });
+            
+            initialsModal.classList.add('hidden');
+            winModal.classList.remove('hidden');
+            updateDisplays();
+        }
+
+        function spawnEnemies() {
+            enemies = [];
+            const validSpawns = [];
+            for (let r = 0; r < MAZE.length; r++) {
+                for (let c = 0; c < MAZE[r].length; c++) {
+                    if (MAZE[r][c] === 0 && (r > MAZE_HEIGHT / 2 || c > MAZE_WIDTH / 2)) {
+                        validSpawns.push({ x: c, y: r });
+                    }
+                }
+            }
+
+            for (let i = 0; i < level; i++) {
+                if (validSpawns.length > 0) {
+                    const spawnIndex = Math.floor(Math.random() * validSpawns.length);
+                    enemies.push(validSpawns.splice(spawnIndex, 1)[0]);
+                }
+            }
+        }
+        
+        function updateDisplays() {
+            levelScoreDisplay.innerHTML = `LEVEL ${level}:<br>${possibleScore}`;
+            currentScoreDisplay.innerHTML = `CURRENT GAME:<br>${totalScore}`;
+            sessionHighscoreDisplay.innerHTML = `SESSION HIGH:<br>${sessionHighScore}`;
+            alltimeHighscoreDisplay.innerHTML = `ALL-TIME HIGH:<br>${allTimeHighScore} ${allTimeHighInitials}`;
+        }
+
+        function startLevel() {
+            MAZE = generateMaze(MAZE_WIDTH, MAZE_HEIGHT);
+            setCanvasSize();
+
+            player = { x: 1, y: 1 };
+            goal = { x: MAZE_WIDTH - 2, y: MAZE_HEIGHT - 2 };
+            gameActive = true;
+            hasPlayerMoved = false;
+            possibleScore = 1000;
+            
+            updateDisplays();
+            spawnEnemies();
+            
+            winModal.classList.add('hidden');
+            gameOverModal.classList.add('hidden');
+            initialsModal.classList.add('hidden');
+            
+            drawGame();
+            
+            clearInterval(enemyMoveTimer);
+            clearInterval(timePenaltyInterval);
+        }
+        
+        function resetGame() {
+            level = 1;
+            totalScore = 0;
+            startLevel();
+        }
+
+        function setupTouchControls() {
+            const isTouchDevice = ('ontouchstart' in window) || (navigator.maxTouchPoints > 0);
+            if (isTouchDevice) {
+                dPadContainer.classList.remove('hidden');
+                instructions.textContent = "Use the D-PAD to move!";
+
+                const handleMove = (dx, dy) => (e) => {
+                    e.preventDefault();
+                    movePlayer(dx, dy);
+                };
+
+                upBtn.addEventListener('touchstart', handleMove(0, -1));
+                downBtn.addEventListener('touchstart', handleMove(0, 1));
+                leftBtn.addEventListener('touchstart', handleMove(-1, 0));
+                rightBtn.addEventListener('touchstart', handleMove(1, 0));
+            }
+        }
+
+        function handleKeyDown(event) {
+            if (!winModal.classList.contains('hidden') && event.key === 'Enter') {
+                startLevel();
+                return;
+            }
+            if (!gameOverModal.classList.contains('hidden') && event.key === 'Enter') {
+                resetGame();
+                return;
+            }
+            if (!initialsModal.classList.contains('hidden') && event.key === 'Enter') {
+                submitNewHighScore();
+                return;
+            }
+
+            if (gameActive) {
+                switch (event.key) {
+                    case 'ArrowUp': movePlayer(0, -1); break;
+                    case 'ArrowDown': movePlayer(0, 1); break;
+                    case 'ArrowLeft': movePlayer(-1, 0); break;
+                    case 'ArrowRight': movePlayer(1, 0); break;
+                }
+            }
+        }
+        
+        function init() {
+            const savedSessionHighScore = localStorage.getItem('mazeSessionHighScore');
+            if (savedSessionHighScore) {
+                sessionHighScore = parseInt(savedSessionHighScore, 10);
+            }
+
+            highScoreRef.get().then((doc) => {
+                if (doc.exists) {
+                    allTimeHighScore = doc.data().score || 0;
+                    allTimeHighInitials = doc.data().initials || "AAA";
+                } else {
+                    highScoreRef.set({ score: 0, initials: "AAA" });
+                    allTimeHighScore = 0;
+                }
+                updateDisplays();
+            }).catch((error) => {
+                console.error("Error getting high score:", error);
+            });
+
+            nextLevelBtn.addEventListener('click', startLevel);
+            playAgainBtn.addEventListener('click', resetGame);
+            submitInitialsBtn.addEventListener('click', submitNewHighScore);
+
+            document.addEventListener('keydown', handleKeyDown);
+            
+            startScreen.addEventListener('click', () => {
+                Tone.start().then(() => {
+                    soundsReady = true;
+                });
+                startScreen.classList.add('hidden');
+                mainUI.classList.remove('hidden');
+                setupTouchControls();
+                startLevel();
+            }, { once: true });
+        }
+
+        init();
+    </script>
+
+</body>
+</html>
