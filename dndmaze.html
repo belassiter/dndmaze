@@ -285,11 +285,10 @@
         const MAZE_HEIGHT = 31;
         const WALL_REMOVAL_PERCENTAGE = 0.22;
         const EMOJI_SET = {
-            WALL: '🧱',
-            PLAYER_LEFT: '🏃',
-            PLAYER_RIGHT: '🏃‍➡️',
-            ENEMY: '👹',
-            GOAL: '🟩'
+            WALL: '\u{1F9F1}',
+            PLAYER: '\u{1F3C3}',
+            ENEMY: '\u{1F479}',
+            GOAL: '\u{1F7E9}'
         };
 
         // --- Game State ---
@@ -323,7 +322,6 @@
             let maze = Array(height).fill(null).map(() => Array(width).fill(1));
             const stack = [];
             
-            // Start from a random central point
             const startX = Math.floor(width / 4 + Math.random() * (width / 2)) | 1;
             const startY = Math.floor(height / 4 + Math.random() * (height / 2)) | 1;
 
@@ -435,8 +433,16 @@
                     ctx.fillText(EMOJI_SET.ENEMY, enemy.x * TILE_SIZE + offset, enemy.y * TILE_SIZE + offset);
                 });
 
-                const playerEmoji = playerDirection === 'right' ? EMOJI_SET.PLAYER_RIGHT : EMOJI_SET.PLAYER_LEFT;
-                ctx.fillText(playerEmoji, player.x * TILE_SIZE + offset, player.y * TILE_SIZE + offset);
+                // Handle player direction by flipping the canvas context
+                const playerX = player.x * TILE_SIZE + offset;
+                const playerY = player.y * TILE_SIZE + offset;
+                ctx.save();
+                ctx.translate(playerX, playerY);
+                if (playerDirection === 'left') {
+                    ctx.scale(-1, 1);
+                }
+                ctx.fillText(EMOJI_SET.PLAYER, 0, 0);
+                ctx.restore();
 
             } else {
                 for (let row = 0; row < MAZE.length; row++) {
