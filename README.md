@@ -31,9 +31,9 @@ A web-based maze game where you must navigate through a randomly generated maze,
 -   **Audio:** [Tone.js](https://tonejs.github.io/)
 -   **Backend:** [Firebase (Firestore)](https://firebase.google.com/docs/firestore) for high score storage.
 
-## Running Locally
+## Plaing
 
-To run the game locally, simply download the `dndmaze.html` file and open it in your web browser.
+- The game is hosted at https://belassiter.com/dndmaze.html
 
 ## Deployment
 
