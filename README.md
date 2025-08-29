@@ -8,9 +8,9 @@ A web-based maze game where you must navigate through a randomly generated maze,
 -   **Controls:**
     -   **Desktop:** Use the arrow keys to move your character.
     -   **Mobile:** Use the on-screen D-pad to move.
-    -   **Gamepad:** The game has support for gamepads.
+    -   **Gamepad:** Use your gamepad to move.
 -   **Enemies:** Avoid the red guardians that will pursue you through the maze.
--   **Scoring:** Your score is based on how quickly you complete each level. There are session and all-time high scores.
+-   **Scoring:** Your score is based on how quickly you complete each level. There are session and all-time high scores for each mode.
 
 ## Features
 
@@ -31,7 +31,7 @@ A web-based maze game where you must navigate through a randomly generated maze,
 -   **Audio:** [Tone.js](https://tonejs.github.io/)
 -   **Backend:** [Firebase (Firestore)](https://firebase.google.com/docs/firestore) for high score storage.
 
-## Plaing
+## Playing
 
 - The game is hosted at https://belassiter.com/dndmaze.html
 
