@@ -287,8 +287,7 @@
         let enemyMoveTimer;
         let enemyMoveInterval = 1000;
         let crazyModeInterval;
-        let difficulty = 'easy';
-        let isCrazyMode = false;
+        let difficulty = 'easy_normal';
         let highScoreRef;
         let ledgerRef;
 
@@ -418,7 +417,7 @@
                         updateDisplays();
                     }, 100);
                     startEnemyTimers();
-                    if (isCrazyMode) {
+                    if (difficulty.includes('crazy')) {
                         crazyModeInterval = setInterval(regenerateTheWorld, 5000);
                     }
                 }
@@ -433,7 +432,7 @@
         function enemyMoveLoop() {
             if (!gameActive) return;
             moveEnemies();
-            if (difficultyToggle.checked) {
+            if (difficulty.includes('hard')) {
                 if (enemyMoveInterval > 125) { // Cap at 8 moves/sec
                     enemyMoveInterval -= 10; // 0.01s
                 }
@@ -539,8 +538,8 @@
             clearInterval(timePenaltyInterval);
             clearInterval(crazyModeInterval);
 
-            await ledgerRef.add({ score: totalScore, difficulty: difficulty });
-            const snapshot = await ledgerRef.where("difficulty", "==", difficulty).get();
+            await ledgerRef.add({ score: totalScore });
+            const snapshot = await ledgerRef.get();
             const allScores = snapshot.docs.map(doc => doc.data().score);
             const scoresBelow = allScores.filter(s => s < totalScore).length;
             const percentile = allScores.length > 0 ? Math.round((scoresBelow / allScores.length) * 100) : 100;
@@ -693,25 +692,9 @@
 
         function updateDifficulty() {
             const isHard = difficultyToggle.checked;
-            isCrazyMode = crazyToggle.checked;
+            const isCrazy = crazyToggle.checked;
 
-            if (isCrazyMode) {
-                difficulty = 'crazy';
-                crazyLabel.classList.remove('text-gray-500');
-                crazyLabel.classList.add('text-purple-400');
-                normalLabel.classList.remove('text-blue-400');
-                normalLabel.classList.add('text-gray-500');
-                crazySlider.classList.remove('normal');
-                crazySlider.classList.add('crazy');
-            } else {
-                difficulty = isHard ? 'hard' : 'easy';
-                crazyLabel.classList.add('text-gray-500');
-                crazyLabel.classList.remove('text-purple-400');
-                normalLabel.classList.add('text-blue-400');
-                normalLabel.classList.remove('text-gray-500');
-                crazySlider.classList.remove('crazy');
-                crazySlider.classList.add('normal');
-            }
+            difficulty = `${isHard ? 'hard' : 'easy'}_${isCrazy ? 'crazy' : 'normal'}`;
             
             highScoreRef = db.collection("scores").doc(`${difficulty}HighScore`);
             ledgerRef = db.collection(`${difficulty}ScoreLedger`);
@@ -730,6 +713,7 @@
                 updateDisplays();
             });
 
+            // Update UI for Hard/Easy toggle
             if (isHard) {
                 hardLabel.classList.remove('text-gray-500');
                 hardLabel.classList.add('text-red-400');
@@ -744,6 +728,23 @@
                 hardLabel.classList.add('text-gray-500');
                 difficultySlider.classList.remove('hard');
                 difficultySlider.classList.add('easy');
+            }
+
+            // Update UI for Crazy/Normal toggle
+            if (isCrazy) {
+                crazyLabel.classList.remove('text-gray-500');
+                crazyLabel.classList.add('text-purple-400');
+                normalLabel.classList.remove('text-blue-400');
+                normalLabel.classList.add('text-gray-500');
+                crazySlider.classList.remove('normal');
+                crazySlider.classList.add('crazy');
+            } else {
+                crazyLabel.classList.add('text-gray-500');
+                crazyLabel.classList.remove('text-purple-400');
+                normalLabel.classList.add('text-blue-400');
+                normalLabel.classList.remove('text-gray-500');
+                crazySlider.classList.remove('crazy');
+                crazySlider.classList.add('normal');
             }
         }
         
