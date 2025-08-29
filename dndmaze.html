@@ -101,6 +101,8 @@
         .slider.hard { background-color: #ff4136; }
         .slider.normal { background-color: #3b82f6; }
         .slider.crazy { background-color: #a855f7; }
+        .slider.retro { background-color: #facc15; }
+        .slider.emoji { background-color: #fb923c; }
     </style>
 </head>
 <body class="bg-gray-900 text-white flex flex-col justify-center items-center min-h-screen p-2">
@@ -153,13 +155,21 @@
                     </label>
                     <span id="hard-label" class="text-left">HARD</span>
                 </div>
-                 <div class="grid grid-cols-3 gap-x-2 items-center mb-4">
+                 <div class="grid grid-cols-3 gap-x-2 items-center mb-2">
                     <span id="normal-label" class="text-right">NORMAL</span>
                     <label class="switch mx-auto">
                         <input type="checkbox" id="crazy-toggle">
                         <span id="crazy-slider" class="slider"></span>
                     </label>
                     <span id="crazy-label" class="text-left">CRAZY</span>
+                </div>
+                <div class="grid grid-cols-3 gap-x-2 items-center mb-4">
+                    <span id="graphics-label" class="text-right">RETRO</span>
+                    <label class="switch mx-auto">
+                        <input type="checkbox" id="emoji-toggle">
+                        <span id="emoji-slider" class="slider"></span>
+                    </label>
+                    <span id="emoji-label" class="text-left">EMOJI</span>
                 </div>
                 <div id="alltime-highscore-display" class="text-red-400 mb-4">ALL-TIME HIGH:<br>0 ---</div>
                 <div id="session-highscore-display" class="text-green-400 mb-4">SESSION HIGH:<br>0</div>
@@ -246,6 +256,10 @@
         const crazySlider = document.getElementById('crazy-slider');
         const normalLabel = document.getElementById('normal-label');
         const crazyLabel = document.getElementById('crazy-label');
+        const emojiToggle = document.getElementById('emoji-toggle');
+        const emojiSlider = document.getElementById('emoji-slider');
+        const graphicsLabel = document.getElementById('graphics-label');
+        const emojiLabel = document.getElementById('emoji-label');
         const resetBtn = document.getElementById('reset-btn');
 
         // --- Audio Synths (Tone.js) ---
@@ -270,6 +284,13 @@
         const MAZE_WIDTH = 31;
         const MAZE_HEIGHT = 31;
         const WALL_REMOVAL_PERCENTAGE = 0.22;
+        const EMOJI_SET = {
+            WALL: '🧱',
+            PLAYER_LEFT: '🏃',
+            PLAYER_RIGHT: '🏃‍➡️',
+            ENEMY: '👹',
+            GOAL: '🟩'
+        };
 
         // --- Game State ---
         let MAZE;
@@ -295,13 +316,17 @@
         let lastGamepadMoveTime = 0;
         const GAMEPAD_MOVE_COOLDOWN = 120;
         const GAMEPAD_AXIS_DEADZONE = 0.5;
+        let useEmojiMode = false;
+        let playerDirection = 'right';
 
         function generateMaze(width, height) {
             let maze = Array(height).fill(null).map(() => Array(width).fill(1));
             const stack = [];
             
-            const startX = Math.floor(Math.random() * (width / 2)) * 2 + 1;
-            const startY = Math.floor(Math.random() * (height / 2)) * 2 + 1;
+            // Start from a random central point
+            const startX = Math.floor(width / 4 + Math.random() * (width / 2)) | 1;
+            const startY = Math.floor(height / 4 + Math.random() * (height / 2)) | 1;
+
             let current = { x: startX, y: startY };
             maze[current.y][current.x] = 0;
             stack.push(current);
@@ -387,27 +412,58 @@
             ctx.fillStyle = '#1a1a1a';
             ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-            for (let row = 0; row < MAZE.length; row++) {
-                for (let col = 0; col < MAZE[row].length; col++) {
-                    const tile = MAZE[row][col];
-                    if (tile === 1) { ctx.fillStyle = '#007acc'; } 
-                    else if (tile === 2) { ctx.fillStyle = '#4CAF50'; }
-                    else { continue; }
-                    ctx.fillRect(col * TILE_SIZE, row * TILE_SIZE, TILE_SIZE, TILE_SIZE);
-                }
-            }
-            
-            ctx.fillStyle = '#ff4136';
-            enemies.forEach(enemy => {
-                ctx.fillRect(enemy.x * TILE_SIZE, enemy.y * TILE_SIZE, TILE_SIZE, TILE_SIZE);
-            });
+            if (useEmojiMode) {
+                ctx.font = `${TILE_SIZE * 0.95}px sans-serif`;
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                const offset = TILE_SIZE / 2;
 
-            ctx.fillStyle = '#ffff00';
-            ctx.fillRect(player.x * TILE_SIZE, player.y * TILE_SIZE, TILE_SIZE, TILE_SIZE);
+                for (let row = 0; row < MAZE.length; row++) {
+                    for (let col = 0; col < MAZE[row].length; col++) {
+                        const tile = MAZE[row][col];
+                        const x = col * TILE_SIZE + offset;
+                        const y = row * TILE_SIZE + offset;
+                        if (tile === 1) {
+                            ctx.fillText(EMOJI_SET.WALL, x, y);
+                        } else if (tile === 2) {
+                            ctx.fillText(EMOJI_SET.GOAL, x, y);
+                        }
+                    }
+                }
+
+                enemies.forEach(enemy => {
+                    ctx.fillText(EMOJI_SET.ENEMY, enemy.x * TILE_SIZE + offset, enemy.y * TILE_SIZE + offset);
+                });
+
+                const playerEmoji = playerDirection === 'right' ? EMOJI_SET.PLAYER_RIGHT : EMOJI_SET.PLAYER_LEFT;
+                ctx.fillText(playerEmoji, player.x * TILE_SIZE + offset, player.y * TILE_SIZE + offset);
+
+            } else {
+                for (let row = 0; row < MAZE.length; row++) {
+                    for (let col = 0; col < MAZE[row].length; col++) {
+                        const tile = MAZE[row][col];
+                        if (tile === 1) { ctx.fillStyle = '#007acc'; } 
+                        else if (tile === 2) { ctx.fillStyle = '#4CAF50'; }
+                        else { continue; }
+                        ctx.fillRect(col * TILE_SIZE, row * TILE_SIZE, TILE_SIZE, TILE_SIZE);
+                    }
+                }
+                
+                ctx.fillStyle = '#ff4136';
+                enemies.forEach(enemy => {
+                    ctx.fillRect(enemy.x * TILE_SIZE, enemy.y * TILE_SIZE, TILE_SIZE, TILE_SIZE);
+                });
+
+                ctx.fillStyle = '#ffff00';
+                ctx.fillRect(player.x * TILE_SIZE, player.y * TILE_SIZE, TILE_SIZE, TILE_SIZE);
+            }
         }
 
         function movePlayer(dx, dy) {
             if (!gameActive) return;
+            
+            if (dx > 0) playerDirection = 'right';
+            if (dx < 0) playerDirection = 'left';
 
             const newX = player.x + dx;
             const newY = player.y + dy;
@@ -609,19 +665,44 @@
 
         function spawnEnemies() {
             enemies = [];
-            const validSpawns = [];
-            for (let r = 0; r < MAZE.length; r++) {
-                for (let c = 0; c < MAZE[r].length; c++) {
-                    if (MAZE[r][c] === 0 && (r > MAZE_HEIGHT / 2 || c > MAZE_WIDTH / 2)) {
-                        validSpawns.push({ x: c, y: r });
+            const spawnQuadrants = {
+                topRight: [],
+                bottomLeft: [],
+                bottomRight: []
+            };
+
+            const midX = MAZE_WIDTH / 2;
+            const midY = MAZE_HEIGHT / 2;
+
+            for (let r = 1; r < MAZE_HEIGHT - 1; r++) {
+                for (let c = 1; c < MAZE_WIDTH - 1; c++) {
+                    if (MAZE[r][c] === 0) { // is a path
+                        if (r <= midY && c > midX) {
+                            spawnQuadrants.topRight.push({ x: c, y: r });
+                        } else if (r > midY && c <= midX) {
+                            spawnQuadrants.bottomLeft.push({ x: c, y: r });
+                        } else if (r > midY && c > midX) {
+                            spawnQuadrants.bottomRight.push({ x: c, y: r });
+                        }
                     }
                 }
             }
-
+            
+            const quadrantOrder = [spawnQuadrants.bottomRight, spawnQuadrants.topRight, spawnQuadrants.bottomLeft];
+            
             for (let i = 0; i < level; i++) {
-                if (validSpawns.length > 0) {
-                    const spawnIndex = Math.floor(Math.random() * validSpawns.length);
-                    enemies.push(validSpawns.splice(spawnIndex, 1)[0]);
+                let placedEnemy = false;
+                for (let j = 0; j < quadrantOrder.length; j++) {
+                    const currentQuadrantList = quadrantOrder[(i + j) % 3];
+                    if (currentQuadrantList.length > 0) {
+                        const spawnIndex = Math.floor(Math.random() * currentQuadrantList.length);
+                        enemies.push(currentQuadrantList.splice(spawnIndex, 1)[0]);
+                        placedEnemy = true;
+                        break;
+                    }
+                }
+                if (!placedEnemy) {
+                    break; // No more spawns available anywhere
                 }
             }
         }
@@ -753,6 +834,22 @@
             }
         }
         
+        function updateDisplayMode() {
+            useEmojiMode = emojiToggle.checked;
+            
+            if (useEmojiMode) {
+                emojiLabel.classList.remove('text-gray-500'); emojiLabel.classList.add('text-orange-400');
+                graphicsLabel.classList.remove('text-yellow-400'); graphicsLabel.classList.add('text-gray-500');
+                emojiSlider.classList.remove('retro'); emojiSlider.classList.add('emoji');
+            } else {
+                graphicsLabel.classList.remove('text-gray-500'); graphicsLabel.classList.add('text-yellow-400');
+                emojiLabel.classList.remove('text-orange-400'); emojiLabel.classList.add('text-gray-500');
+                emojiSlider.classList.remove('emoji'); emojiSlider.classList.add('retro');
+            }
+            
+            drawGame();
+        }
+
         function getDistance(pos1, pos2) {
             return Math.sqrt(Math.pow(pos1.x - pos2.x, 2) + Math.pow(pos1.y - pos2.y, 2));
         }
@@ -866,6 +963,7 @@
         
         function init() {
             updateDifficulty();
+            updateDisplayMode();
 
             nextLevelBtn.addEventListener('click', startLevel);
             playAgainBtn.addEventListener('click', resetGame);
@@ -873,9 +971,10 @@
             submitInitialsBtn.addEventListener('click', submitNewHighScore);
             difficultyToggle.addEventListener('change', () => updateDifficulty());
             crazyToggle.addEventListener('change', () => updateDifficulty());
-
-            document.addEventListener('keydown', handleKeyDown);
+            emojiToggle.addEventListener('change', updateDisplayMode);
             
+            document.addEventListener('keydown', handleKeyDown);
+
             startScreen.addEventListener('click', () => {
                 Tone.start().then(() => {
                     soundsReady = true;
