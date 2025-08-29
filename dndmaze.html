@@ -107,8 +107,9 @@
 
     <div id="start-screen" class="modal-backdrop cursor-pointer">
         <div class="modal-content">
-            <h1 class="text-2xl md:text-5xl text-yellow-400 mb-8">DnD's Maze Runner</h1>
-            <p class="text-xl md:text-2xl text-white animate-pulse">Click to Start</p>
+            <h1 class="text-2xl md:text-5xl text-yellow-400 mb-4">DnD's Maze Runner</h1>
+            <p class="text-md md:text-lg text-white max-w-md mx-auto">Escape the maze by reaching the <span class="text-green-400">green exit</span> while avoiding the <span class="text-red-400">red guardians</span>.</p>
+            <p class="text-xl md:text-2xl text-white animate-pulse mt-8">Click to Start</p>
         </div>
     </div>
     
@@ -290,12 +291,15 @@
         let difficulty = 'easy_normal';
         let highScoreRef;
         let ledgerRef;
+        let gamepadIndex = null;
+        let lastGamepadMoveTime = 0;
+        const GAMEPAD_MOVE_COOLDOWN = 120;
+        const GAMEPAD_AXIS_DEADZONE = 0.5;
 
         function generateMaze(width, height) {
             let maze = Array(height).fill(null).map(() => Array(width).fill(1));
             const stack = [];
             
-            // Start from a random central point
             const startX = Math.floor(Math.random() * (width / 2)) * 2 + 1;
             const startY = Math.floor(Math.random() * (height / 2)) * 2 + 1;
             let current = { x: startX, y: startY };
@@ -325,7 +329,7 @@
             }
             
             addExtraPaths(maze);
-            maze[1][1] = 0; // Ensure player start is clear
+            maze[1][1] = 0;
             maze[height - 2][width - 2] = 2;
             return maze;
         }
@@ -438,8 +442,8 @@
             if (!gameActive) return;
             moveEnemies();
             if (difficulty.includes('hard')) {
-                if (enemyMoveInterval > 125) { // Cap at 8 moves/sec
-                    enemyMoveInterval -= 10; // 0.01s
+                if (enemyMoveInterval > 125) {
+                    enemyMoveInterval -= 10;
                 }
             }
             enemyMoveTimer = setTimeout(enemyMoveLoop, enemyMoveInterval);
@@ -490,7 +494,7 @@
                 }
             });
 
-            let newVolume = -20; // Baseline volume
+            let newVolume = -20;
             if (minDistance <= 2) { newVolume = -2; } 
             else if (minDistance <= 5) { newVolume = -8; } 
             else if (minDistance <= 10) { newVolume = -14; }
@@ -543,7 +547,7 @@
             clearInterval(timePenaltyInterval);
             clearInterval(crazyModeInterval);
 
-            await ledgerRef.add({ score: totalScore });
+            await ledgerRef.add({ score: totalScore, level: level, datetime: new Date() });
             const snapshot = await ledgerRef.get();
             const allScores = snapshot.docs.map(doc => doc.data().score);
             const scoresBelow = allScores.filter(s => s < totalScore).length;
@@ -728,38 +732,24 @@
                 updateDisplays();
             });
 
-            // Update UI for Hard/Easy toggle
             if (isHard) {
-                hardLabel.classList.remove('text-gray-500');
-                hardLabel.classList.add('text-red-400');
-                easyLabel.classList.remove('text-green-400');
-                easyLabel.classList.add('text-gray-500');
-                difficultySlider.classList.remove('easy');
-                difficultySlider.classList.add('hard');
+                hardLabel.classList.remove('text-gray-500'); hardLabel.classList.add('text-red-400');
+                easyLabel.classList.remove('text-green-400'); easyLabel.classList.add('text-gray-500');
+                difficultySlider.classList.remove('easy'); difficultySlider.classList.add('hard');
             } else {
-                easyLabel.classList.remove('text-gray-500');
-                easyLabel.classList.add('text-green-400');
-                hardLabel.classList.remove('text-red-400');
-                hardLabel.classList.add('text-gray-500');
-                difficultySlider.classList.remove('hard');
-                difficultySlider.classList.add('easy');
+                easyLabel.classList.remove('text-gray-500'); easyLabel.classList.add('text-green-400');
+                hardLabel.classList.remove('text-red-400'); hardLabel.classList.add('text-gray-500');
+                difficultySlider.classList.remove('hard'); difficultySlider.classList.add('easy');
             }
 
-            // Update UI for Crazy/Normal toggle
             if (isCrazy) {
-                crazyLabel.classList.remove('text-gray-500');
-                crazyLabel.classList.add('text-purple-400');
-                normalLabel.classList.remove('text-blue-400');
-                normalLabel.classList.add('text-gray-500');
-                crazySlider.classList.remove('normal');
-                crazySlider.classList.add('crazy');
+                crazyLabel.classList.remove('text-gray-500'); crazyLabel.classList.add('text-purple-400');
+                normalLabel.classList.remove('text-blue-400'); normalLabel.classList.add('text-gray-500');
+                crazySlider.classList.remove('normal'); crazySlider.classList.add('crazy');
             } else {
-                crazyLabel.classList.add('text-gray-500');
-                crazyLabel.classList.remove('text-purple-400');
-                normalLabel.classList.add('text-blue-400');
-                normalLabel.classList.remove('text-gray-500');
-                crazySlider.classList.remove('crazy');
-                crazySlider.classList.add('normal');
+                crazyLabel.classList.add('text-gray-500'); crazyLabel.classList.remove('text-purple-400');
+                normalLabel.classList.add('text-blue-400'); normalLabel.classList.remove('text-gray-500');
+                crazySlider.classList.remove('crazy'); crazySlider.classList.add('normal');
             }
         }
         
@@ -771,7 +761,7 @@
             for (let radius = 0; radius < Math.max(MAZE_WIDTH, MAZE_HEIGHT); radius++) {
                 for (let dx = -radius; dx <= radius; dx++) {
                     for (let dy = -radius; dy <= radius; dy++) {
-                        if (Math.abs(dx) + Math.abs(dy) !== radius) continue; // Only check the perimeter of the spiral
+                        if (Math.abs(dx) + Math.abs(dy) !== radius) continue;
                         
                         const newPos = { x: oldPos.x + dx, y: oldPos.y + dy };
 
@@ -782,7 +772,7 @@
                     }
                 }
             }
-            return { x: 1, y: 1 }; // Failsafe
+            return { x: 1, y: 1 };
         }
 
         async function regenerateTheWorld() {
@@ -802,12 +792,10 @@
                 attempts++;
                 newMaze = generateMaze(MAZE_WIDTH, MAZE_HEIGHT);
                 
-                // Relocate Player
                 newPlayerPos = findSafeRelocationSpot(newMaze, oldPlayerPos, (newPos) => {
                     return getDistance(newPos, goal) >= oldPlayerDistToGoal;
                 });
 
-                // Relocate Enemies
                 let enemiesPlacedSuccessfully = true;
                 newEnemyPositions = [];
                 for(let i = 0; i < oldEnemyPositions.length; i++) {
@@ -837,6 +825,44 @@
             gameActive = true;
             startEnemyTimers();
         }
+
+        function pollGamepad() {
+            if (gamepadIndex === null || !gameActive) return;
+
+            const gamepad = navigator.getGamepads()[gamepadIndex];
+            if (!gamepad) return;
+
+            const now = Date.now();
+            if (now - lastGamepadMoveTime < GAMEPAD_MOVE_COOLDOWN) {
+                return;
+            }
+
+            const axes = gamepad.axes;
+            const buttons = gamepad.buttons;
+
+            let dx = 0;
+            let dy = 0;
+
+            if (axes[1] < -GAMEPAD_AXIS_DEADZONE) dy = -1;      
+            else if (axes[1] > GAMEPAD_AXIS_DEADZONE) dy = 1;   
+            else if (axes[0] < -GAMEPAD_AXIS_DEADZONE) dx = -1; 
+            else if (axes[0] > GAMEPAD_AXIS_DEADZONE) dx = 1;  
+
+            if (buttons[12]?.pressed) dy = -1;
+            else if (buttons[13]?.pressed) dy = 1;
+            else if (buttons[14]?.pressed) dx = -1;
+            else if (buttons[15]?.pressed) dx = 1;
+
+            if (dx !== 0 || dy !== 0) {
+                movePlayer(dx, dy);
+                lastGamepadMoveTime = now;
+            }
+        }
+
+        function gameLoop() {
+            pollGamepad();
+            requestAnimationFrame(gameLoop);
+        }
         
         function init() {
             updateDifficulty();
@@ -865,6 +891,21 @@
                 calculateTileSizeAndResize();
                 drawGame();
             });
+
+            window.addEventListener('gamepadconnected', (e) => {
+                gamepadIndex = e.gamepad.index;
+                instructions.textContent = "Use ARROW KEYS, D-PAD, or CONTROLLER to move!";
+            });
+
+            window.addEventListener('gamepaddisconnected', (e) => {
+                if (gamepadIndex === e.gamepad.index) {
+                    gamepadIndex = null;
+                    const isTouchDevice = ('ontouchstart' in window) || (navigator.maxTouchPoints > 0);
+                    instructions.textContent = isTouchDevice ? "Use the D-PAD to move!" : "Use ARROW KEYS to move!";
+                }
+            });
+
+            gameLoop();
         }
 
         init();
@@ -872,3 +913,4 @@
 
 </body>
 </html>
+
