@@ -95,6 +95,7 @@
         .slider:before { position: absolute; content: ""; height: 22px; width: 22px; left: 4px; bottom: 4px; background-color: white; transition: .4s; }
         input:checked + .slider { background-color: #ff4136; }
         input:checked + .slider:before { transform: translateX(26px); }
+        input:disabled + .slider { cursor: not-allowed; background-color: #555 !important; }
     </style>
 </head>
 <body class="bg-gray-900 text-white flex flex-col justify-center items-center min-h-screen p-2">
@@ -150,6 +151,7 @@
                 <div id="session-highscore-display" class="text-green-400 mb-4">SESSION HIGH:<br>0</div>
                 <div id="current-score-display" class="text-white mb-4">CURRENT GAME:<br>0</div>
                 <div id="level-score-display" class="text-cyan-400">LEVEL 1:<br>1000</div>
+                <button id="reset-btn" class="modal-button w-full mt-2 bg-red-500 hover:bg-red-600">RESET</button>
             </div>
         </div>
         <p id="instructions" class="mt-4 text-sm text-center">Use ARROW KEYS to move!</p>
@@ -197,9 +199,7 @@
         };
         firebase.initializeApp(firebaseConfig);
         const db = firebase.firestore();
-        const highScoreRef = db.collection("scores").doc("globalHighScore");
-        const ledgerRef = db.collection("scoreLedger");
-
+        
         // --- DOM Elements ---
         const startScreen = document.getElementById('start-screen');
         const mainUI = document.getElementById('main-ui');
@@ -227,6 +227,7 @@
         const difficultyToggle = document.getElementById('difficulty-toggle');
         const easyLabel = document.getElementById('easy-label');
         const hardLabel = document.getElementById('hard-label');
+        const resetBtn = document.getElementById('reset-btn');
 
         // --- Audio Synths (Tone.js) ---
         let soundsReady = false;
@@ -234,19 +235,17 @@
         const enemyMoveSynth = new Tone.Synth({ oscillator: { type: 'fatsawtooth' }, volume: -Infinity, envelope: { attack: 0.01, decay: 0.2, sustain: 0, release: 0.1 } }).toDestination();
         const defeatSynth = new Tone.PolySynth(Tone.Synth, { oscillator: { type: 'sine' }, volume: -8 }).toDestination();
         const victorySynth = new Tone.Synth({ oscillator: { type: 'triangle' }, volume: -10 }).toDestination();
-        // FIX: Use Tone.Part for crackle-free playback on desktop
+        
         const victoryPart = new Tone.Part((time, note) => {
             victorySynth.triggerAttackRelease(note.name, note.duration, time);
         }, [
-            { time: "0:0", name: "C4", duration: "16n" },
-            { time: "0:0:2", name: "E4", duration: "16n" },
-            { time: "0:1", name: "G4", duration: "16n" },
-            { time: "0:1:2", name: "C5", duration: "16n" },
-            { time: "0:2", name: "E5", duration: "16n" },
-            { time: "0:2:2", name: "G5", duration: "16n" },
+            { time: "0:0", name: "C4", duration: "16n" }, { time: "0:0:2", name: "E4", duration: "16n" },
+            { time: "0:1", name: "G4", duration: "16n" }, { time: "0:1:2", name: "C5", duration: "16n" },
+            { time: "0:2", name: "E5", duration: "16n" }, { time: "0:2:2", name: "G5", duration: "16n" },
             { time: "0:3", name: "C6", duration: "16n" }
         ]).start(0);
         victoryPart.loop = false;
+        Tone.Transport.bpm.value = 140;
 
         // --- Game Configuration ---
         let TILE_SIZE = 20;
@@ -269,9 +268,11 @@
         let gameActive = true;
         let hasPlayerMoved = false;
         let enemyMoveTimer;
-        let enemyMoveInterval = 1000;
+        let enemyRate = 1; // moves per second
         let speedUpInterval;
         let difficulty = 'easy';
+        let highScoreRef;
+        let ledgerRef;
 
         function generateMaze(width, height) {
             let maze = Array(height).fill(null).map(() => Array(width).fill(1));
@@ -336,7 +337,7 @@
         }
 
         function setCanvasSize() {
-            if (!MAZE) return; // Guard against running before maze is generated
+            if (!MAZE) return;
             canvas.width = MAZE[0].length * TILE_SIZE;
             canvas.height = MAZE.length * TILE_SIZE;
         }
@@ -345,8 +346,8 @@
             const defaultTileSize = 20;
             const screenWidth = window.innerWidth;
             
-            if (screenWidth < 768) { // Corresponds to md: breakpoint in Tailwind
-                const gameContainerPadding = 16; // p-2 on body = 8px on each side
+            if (screenWidth < 768) {
+                const gameContainerPadding = 16;
                 const availableWidth = screenWidth - gameContainerPadding;
                 TILE_SIZE = Math.floor(availableWidth / MAZE_WIDTH);
             } else {
@@ -356,7 +357,7 @@
         }
 
         function drawGame() {
-            if (!ctx || !MAZE) return; // Guard against running before maze/context is ready
+            if (!ctx || !MAZE) return;
             ctx.fillStyle = '#1a1a1a';
             ctx.fillRect(0, 0, canvas.width, canvas.height);
 
@@ -392,10 +393,11 @@
                 
                 if (!hasPlayerMoved) {
                     hasPlayerMoved = true;
+                    difficultyToggle.disabled = true;
                     timePenaltyInterval = setInterval(() => {
                         possibleScore--;
                         updateDisplays();
-                    }, 1000);
+                    }, 100);
                     startEnemyTimers();
                 }
                 
@@ -408,21 +410,21 @@
 
         function startEnemyTimers() {
             clearInterval(enemyMoveTimer);
+            let enemyMoveInterval = 1000 / enemyRate;
             enemyMoveTimer = setInterval(moveEnemies, enemyMoveInterval);
 
             if (difficulty === 'hard') {
                 clearInterval(speedUpInterval);
-                speedUpInterval = setInterval(speedUpEnemies, 5000);
-            }
-        }
-
-        function speedUpEnemies() {
-            if (enemyMoveInterval > 250) { // Max speed of 4 moves/sec
-                enemyMoveInterval -= 100;
-                startEnemyTimers(); // Restart main timer with new speed
-            } else {
-                enemyMoveInterval = 250;
-                clearInterval(speedUpInterval); // Reached max speed
+                speedUpInterval = setInterval(() => {
+                    if (enemyRate < 8) {
+                        enemyRate += 0.1;
+                        enemyMoveInterval = 1000 / enemyRate;
+                        clearInterval(enemyMoveTimer);
+                        enemyMoveTimer = setInterval(moveEnemies, enemyMoveInterval);
+                    } else {
+                        clearInterval(speedUpInterval);
+                    }
+                }, 1000);
             }
         }
 
@@ -466,26 +468,31 @@
                 }
             });
 
-            let newVolume = -Infinity;
+            let newVolume = -20; // Baseline volume
             if (minDistance <= 2) { newVolume = -2; } 
             else if (minDistance <= 5) { newVolume = -8; } 
-            else if (minDistance <= 10) { newVolume = -14; } 
-            else if (minDistance <= 20) { newVolume = -20; }
+            else if (minDistance <= 10) { newVolume = -14; }
             
             enemyMoveSynth.volume.rampTo(newVolume, 0.1);
-            if (newVolume > -Infinity) {
-                enemyMoveSynth.triggerAttackRelease('G1', '8n');
-            }
+            enemyMoveSynth.triggerAttackRelease('G1', '8n');
         }
 
         function moveEnemies() {
             if (!gameActive) return;
             
+            const occupiedSpaces = new Set(enemies.map(e => `${e.x},${e.y}`));
+
             enemies.forEach(enemy => {
-                const nextMove = findShortestPath({x: enemy.x, y: enemy.y}, player);
-                if (nextMove) {
+                const nextMove = findShortestPath(enemy, player);
+                if (!nextMove) return;
+
+                const isBlocked = occupiedSpaces.has(`${nextMove.x},${nextMove.y}`);
+
+                if (!isBlocked) {
+                    occupiedSpaces.delete(`${enemy.x},${enemy.y}`);
                     enemy.x = nextMove.x;
                     enemy.y = nextMove.y;
+                    occupiedSpaces.add(`${enemy.x},${enemy.y}`);
                 }
             });
             
@@ -514,9 +521,8 @@
             clearInterval(timePenaltyInterval);
             clearInterval(speedUpInterval);
 
-            // Add score to ledger and calculate percentile
-            await ledgerRef.add({ score: totalScore });
-            const snapshot = await ledgerRef.get();
+            await ledgerRef.add({ score: totalScore, difficulty: difficulty });
+            const snapshot = await ledgerRef.where("difficulty", "==", difficulty).get();
             const allScores = snapshot.docs.map(doc => doc.data().score);
             const scoresBelow = allScores.filter(s => s < totalScore).length;
             const percentile = allScores.length > 0 ? Math.round((scoresBelow / allScores.length) * 100) : 100;
@@ -540,7 +546,7 @@
             
             if (totalScore > sessionHighScore) {
                 sessionHighScore = totalScore;
-                localStorage.setItem('mazeSessionHighScore', sessionHighScore);
+                localStorage.setItem(`mazeSessionHighScore_${difficulty}`, sessionHighScore);
             }
 
             if (totalScore > allTimeHighScore) {
@@ -554,8 +560,7 @@
         }
 
         function submitNewHighScore() {
-            const initials = initialsInput.value.trim().toUpperCase().substring(0, 3);
-            if (initials.length < 1) return; // Don't submit empty initials
+            const initials = initialsInput.value.trim().toUpperCase().substring(0, 3) || "AAA";
 
             allTimeHighScore = totalScore;
             allTimeHighInitials = initials;
@@ -593,7 +598,7 @@
         }
 
         function startLevel() {
-            Tone.Transport.stop(); // Stop any previous victory music
+            Tone.Transport.stop();
             MAZE = generateMaze(MAZE_WIDTH, MAZE_HEIGHT);
             calculateTileSizeAndResize();
             
@@ -602,7 +607,7 @@
             gameActive = true;
             hasPlayerMoved = false;
             possibleScore = 1000;
-            enemyMoveInterval = 1000; // Reset speed
+            enemyRate = 1;
             
             updateDisplays();
             spawnEnemies();
@@ -621,6 +626,7 @@
         function resetGame() {
             level = 1;
             totalScore = 0;
+            difficultyToggle.disabled = false;
             startLevel();
         }
 
@@ -665,13 +671,15 @@
                 }
             }
         }
-        
-        function init() {
-            const savedSessionHighScore = localStorage.getItem('mazeSessionHighScore');
-            if (savedSessionHighScore) {
-                sessionHighScore = parseInt(savedSessionHighScore, 10);
-            }
 
+        function updateDifficulty(isHard) {
+            difficulty = isHard ? 'hard' : 'easy';
+            highScoreRef = db.collection("scores").doc(`${difficulty}HighScore`);
+            ledgerRef = db.collection(`${difficulty}ScoreLedger`);
+
+            const savedSessionHighScore = localStorage.getItem(`mazeSessionHighScore_${difficulty}`);
+            sessionHighScore = savedSessionHighScore ? parseInt(savedSessionHighScore, 10) : 0;
+            
             highScoreRef.get().then((doc) => {
                 if (doc.exists) {
                     allTimeHighScore = doc.data().score || 0;
@@ -681,28 +689,29 @@
                     allTimeHighScore = 0;
                 }
                 updateDisplays();
-            }).catch((error) => {
-                console.error("Error getting high score:", error);
             });
+
+            if (isHard) {
+                hardLabel.classList.remove('text-gray-500');
+                hardLabel.classList.add('text-red-400');
+                easyLabel.classList.remove('text-green-400');
+                easyLabel.classList.add('text-gray-500');
+            } else {
+                easyLabel.classList.remove('text-gray-500');
+                easyLabel.classList.add('text-green-400');
+                hardLabel.classList.remove('text-red-400');
+                hardLabel.classList.add('text-gray-500');
+            }
+        }
+        
+        function init() {
+            updateDifficulty(difficultyToggle.checked);
 
             nextLevelBtn.addEventListener('click', startLevel);
             playAgainBtn.addEventListener('click', resetGame);
+            resetBtn.addEventListener('click', resetGame);
             submitInitialsBtn.addEventListener('click', submitNewHighScore);
-            difficultyToggle.addEventListener('change', (e) => {
-                if (e.target.checked) {
-                    difficulty = 'hard';
-                    hardLabel.classList.remove('text-gray-500');
-                    hardLabel.classList.add('text-red-400');
-                    easyLabel.classList.remove('text-green-400');
-                    easyLabel.classList.add('text-gray-500');
-                } else {
-                    difficulty = 'easy';
-                    easyLabel.classList.remove('text-gray-500');
-                    easyLabel.classList.add('text-green-400');
-                    hardLabel.classList.remove('text-red-400');
-                    hardLabel.classList.add('text-gray-500');
-                }
-            });
+            difficultyToggle.addEventListener('change', (e) => updateDifficulty(e.target.checked));
 
             document.addEventListener('keydown', handleKeyDown);
             
@@ -717,7 +726,7 @@
             }, { once: true });
             
             window.addEventListener('resize', () => {
-                if (!MAZE) return; // FIX: Don't resize if maze doesn't exist yet
+                if (!MAZE) return;
                 calculateTileSizeAndResize();
                 drawGame();
             });
