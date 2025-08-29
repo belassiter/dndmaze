@@ -212,7 +212,12 @@
 
         // --- Audio Synths (Tone.js) ---
         let soundsReady = false;
-        const playerMoveSynth = new Tone.Synth({ oscillator: { type: 'sine' }, volume: -12, envelope: { attack: 0.01, decay: 0.1, sustain: 0, release: 0.1 } }).toDestination();
+        // FIX: Use PolySynth for player move sound to handle rapid re-triggering
+        const playerMoveSynth = new Tone.PolySynth(Tone.Synth, {
+            oscillator: { type: 'sine' },
+            volume: -12,
+            envelope: { attack: 0.01, decay: 0.1, sustain: 0, release: 0.1 }
+        }).toDestination();
         const enemyMoveSynth = new Tone.Synth({ oscillator: { type: 'fatsawtooth' }, volume: -Infinity, envelope: { attack: 0.01, decay: 0.2, sustain: 0, release: 0.1 } }).toDestination();
         const defeatSynth = new Tone.PolySynth(Tone.Synth, { oscillator: { type: 'sine' }, volume: -8 }).toDestination();
         const victorySynth = new Tone.Synth({ oscillator: { type: 'triangle' }, volume: -10 }).toDestination();
@@ -303,6 +308,7 @@
         }
 
         function setCanvasSize() {
+            if (!MAZE) return; // Guard against running before maze is generated
             canvas.width = MAZE[0].length * TILE_SIZE;
             canvas.height = MAZE.length * TILE_SIZE;
         }
@@ -319,13 +325,10 @@
                 TILE_SIZE = defaultTileSize;
             }
             setCanvasSize();
-            if (gameActive || hasPlayerMoved) {
-                 drawGame();
-            }
         }
 
         function drawGame() {
-            if (!ctx) return;
+            if (!ctx || !MAZE) return; // Guard against running before maze/context is ready
             ctx.fillStyle = '#1a1a1a';
             ctx.fillRect(0, 0, canvas.width, canvas.height);
 
@@ -544,8 +547,8 @@
         }
 
         function startLevel() {
-            calculateTileSizeAndResize();
             MAZE = generateMaze(MAZE_WIDTH, MAZE_HEIGHT);
+            calculateTileSizeAndResize();
             
             player = { x: 1, y: 1 };
             goal = { x: MAZE_WIDTH - 2, y: MAZE_HEIGHT - 2 };
@@ -649,7 +652,11 @@
                 startLevel();
             }, { once: true });
             
-            window.addEventListener('resize', calculateTileSizeAndResize);
+            window.addEventListener('resize', () => {
+                if (!MAZE) return; // FIX: Don't resize if maze doesn't exist yet
+                calculateTileSizeAndResize();
+                drawGame();
+            });
         }
 
         init();
