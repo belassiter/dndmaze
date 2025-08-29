@@ -35,6 +35,7 @@ A web-based maze game where you must navigate through a randomly generated maze,
 
 - The game is hosted at https://belassiter.com/dndmaze.html
 
-## Deployment
+## Credits
 
-The game is automatically deployed to an FTP server on every push to the `main` branch using a GitHub Actions workflow. The workflow can be found in `.github/workflows/deploy.yml`.
+- Design: Brian and Dorian
+- Code written by Gemini Pro 2.5
