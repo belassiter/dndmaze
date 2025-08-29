@@ -35,10 +35,11 @@
         .modal-content {
             background-color: #1a1a1a;
             border: 4px solid #fff;
-            padding: 2rem;
+            padding: 1rem;
             text-align: center;
             color: #fff;
             box-shadow: 0 0 0 4px #1a1a1a;
+            max-width: 90vw;
         }
         .modal-button {
             background-color: #4CAF50;
@@ -73,8 +74,8 @@
             margin-top: 1rem;
         }
         .d-pad-btn {
-            width: 60px;
-            height: 60px;
+            width: 50px;
+            height: 50px;
             background-color: rgba(255, 255, 255, 0.15);
             border: 2px solid white;
             color: white;
@@ -92,9 +93,9 @@
 <body class="bg-gray-900 text-white flex flex-col justify-center items-center min-h-screen p-2">
 
     <div id="start-screen" class="modal-backdrop cursor-pointer">
-        <div class="text-center">
-            <h1 class="text-4xl md:text-5xl text-yellow-400 mb-8">DnD's Maze Runner</h1>
-            <p class="text-2xl text-white animate-pulse">Click to Start</p>
+        <div class="modal-content">
+            <h1 class="text-2xl md:text-5xl text-yellow-400 mb-8">DnD's Maze Runner</h1>
+            <p class="text-xl md:text-2xl text-white animate-pulse">Click to Start</p>
         </div>
     </div>
     
@@ -129,7 +130,7 @@
                     </div>
                 </div>
             </div>
-            <div id="scoreboard" class="mt-4 md:mt-0 md:ml-8 text-left text-base leading-7 w-full max-w-[620px] md:w-72 p-4 border-4 border-gray-600">
+            <div id="scoreboard" class="mt-4 md:mt-0 md:ml-8 text-left text-sm md:text-base leading-7 w-full max-w-[320px] md:w-72 p-4 border-4 border-gray-600">
                 <div id="alltime-highscore-display" class="text-red-400 mb-4">ALL-TIME HIGH:<br>0 ---</div>
                 <div id="session-highscore-display" class="text-green-400 mb-4">SESSION HIGH:<br>0</div>
                 <div id="current-score-display" class="text-white mb-4">CURRENT GAME:<br>0</div>
@@ -152,6 +153,7 @@
         <div class="modal-content">
             <h2 class="text-2xl text-red-500 mb-4">GAME OVER</h2>
             <p>The maze guardians got you!</p>
+            <p id="percentile-message" class="text-yellow-400 mt-4"></p>
             <button id="playAgainBtn" class="modal-button">Play Again</button>
             <p class="modal-info">(Press ENTER)</p>
         </div>
@@ -181,6 +183,7 @@
         firebase.initializeApp(firebaseConfig);
         const db = firebase.firestore();
         const highScoreRef = db.collection("scores").doc("globalHighScore");
+        const ledgerRef = db.collection("scoreLedger");
 
         // --- DOM Elements ---
         const startScreen = document.getElementById('start-screen');
@@ -196,6 +199,7 @@
         const levelCompleteMessage = document.getElementById('level-complete-message');
         const nextLevelBtn = document.getElementById('nextLevelBtn');
         const gameOverModal = document.getElementById('gameOverModal');
+        const percentileMessage = document.getElementById('percentile-message');
         const playAgainBtn = document.getElementById('playAgainBtn');
         const initialsModal = document.getElementById('initialsModal');
         const initialsInput = document.getElementById('initials-input');
@@ -214,7 +218,7 @@
         const victorySynth = new Tone.Synth({ oscillator: { type: 'triangle' }, volume: -10 }).toDestination();
 
         // --- Game Configuration ---
-        const TILE_SIZE = 20;
+        let TILE_SIZE = 20;
         const ENEMY_MOVE_INTERVAL = 1000;
         const MAZE_WIDTH = 31;
         const MAZE_HEIGHT = 31;
@@ -302,8 +306,26 @@
             canvas.width = MAZE[0].length * TILE_SIZE;
             canvas.height = MAZE.length * TILE_SIZE;
         }
+        
+        function calculateTileSizeAndResize() {
+            const defaultTileSize = 20;
+            const screenWidth = window.innerWidth;
+            
+            if (screenWidth < 768) { // Corresponds to md: breakpoint in Tailwind
+                const gameContainerPadding = 16; // p-2 on body = 8px on each side
+                const availableWidth = screenWidth - gameContainerPadding;
+                TILE_SIZE = Math.floor(availableWidth / MAZE_WIDTH);
+            } else {
+                TILE_SIZE = defaultTileSize;
+            }
+            setCanvasSize();
+            if (gameActive || hasPlayerMoved) {
+                 drawGame();
+            }
+        }
 
         function drawGame() {
+            if (!ctx) return;
             ctx.fillStyle = '#1a1a1a';
             ctx.fillRect(0, 0, canvas.width, canvas.height);
 
@@ -431,7 +453,7 @@
             }
         }
         
-        function gameOver() {
+        async function gameOver() {
             if(soundsReady) {
                 const now = Tone.now();
                 defeatSynth.triggerAttackRelease(['C3', 'D#3', 'G3'], '4n', now);
@@ -439,6 +461,15 @@
             gameActive = false;
             clearInterval(enemyMoveTimer);
             clearInterval(timePenaltyInterval);
+
+            // Add score to ledger and calculate percentile
+            await ledgerRef.add({ score: totalScore });
+            const snapshot = await ledgerRef.get();
+            const allScores = snapshot.docs.map(doc => doc.data().score);
+            const scoresBelow = allScores.filter(s => s < totalScore).length;
+            const percentile = allScores.length > 0 ? Math.round((scoresBelow / allScores.length) * 100) : 100;
+            percentileMessage.textContent = `You did better than ${percentile}% of players!`;
+
             gameOverModal.classList.remove('hidden');
         }
 
@@ -513,9 +544,9 @@
         }
 
         function startLevel() {
+            calculateTileSizeAndResize();
             MAZE = generateMaze(MAZE_WIDTH, MAZE_HEIGHT);
-            setCanvasSize();
-
+            
             player = { x: 1, y: 1 };
             goal = { x: MAZE_WIDTH - 2, y: MAZE_HEIGHT - 2 };
             gameActive = true;
@@ -617,6 +648,8 @@
                 setupTouchControls();
                 startLevel();
             }, { once: true });
+            
+            window.addEventListener('resize', calculateTileSizeAndResize);
         }
 
         init();
