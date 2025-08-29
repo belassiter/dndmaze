@@ -294,7 +294,11 @@
         function generateMaze(width, height) {
             let maze = Array(height).fill(null).map(() => Array(width).fill(1));
             const stack = [];
-            let current = { x: 1, y: 1 };
+            
+            // Start from a random central point
+            const startX = Math.floor(Math.random() * (width / 2)) * 2 + 1;
+            const startY = Math.floor(Math.random() * (height / 2)) * 2 + 1;
+            let current = { x: startX, y: startY };
             maze[current.y][current.x] = 0;
             stack.push(current);
 
@@ -321,6 +325,7 @@
             }
             
             addExtraPaths(maze);
+            maze[1][1] = 0; // Ensure player start is clear
             maze[height - 2][width - 2] = 2;
             return maze;
         }
