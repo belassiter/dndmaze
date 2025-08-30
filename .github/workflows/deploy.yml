@@ -21,6 +21,11 @@ jobs:
     - name: 🚚 Get latest code
       uses: actions/checkout@v4
 
+    # 👇 This new step replaces the '/' in the repo name with a '-'
+    - name: 🛠️ Sanitize repository name
+      id: vars
+      run: echo "repo_name=$(echo ${{ github.repository }} | sed 's/\//-/g')" >> $GITHUB_OUTPUT
+
     - name: 📂 Sync files to FTP server
       uses: SamKirkland/FTP-Deploy-Action@v4.3.4
       with:
@@ -28,10 +33,10 @@ jobs:
         username: ${{ secrets.FTP_USERNAME }}
         password: ${{ secrets.FTP_PASSWORD }}
         server-dir: public_html/
-        # 👇 This gives this repo a unique state file.
-        # This prevents it from deleting files managed by other repos.
-        state-name: .ftp-deploy-state-${{ github.repository }}.json
-        # 👇 This now correctly excludes only the files you don't want to upload.
+        # 👇 This now uses the sanitized repository name.
+        # This prevents the directory error.
+        state-name: .ftp-deploy-state-${{ steps.vars.outputs.repo_name }}.json
+        # 👇 This correctly excludes only the files you don't want to upload.
         exclude: |
           README.md
           LICENSE
