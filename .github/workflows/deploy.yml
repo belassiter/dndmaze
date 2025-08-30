@@ -40,4 +40,5 @@ jobs:
         exclude: |
           README.md
           LICENSE
+          deploy.yml
 
