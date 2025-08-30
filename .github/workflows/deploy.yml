@@ -27,13 +27,12 @@ jobs:
         server: ${{ secrets.FTP_SERVER }}
         username: ${{ secrets.FTP_USERNAME }}
         password: ${{ secrets.FTP_PASSWORD }}
-        # local-dir: ./ # Optional: defaults to the repository root
-        server-dir: public_html/ # Optional: defaults to the server root
-        # 👇 This section prevents deletions and excludes specific files.
-        # - '**' prevents any files from being deleted on the server.
-        # - 'README.md' and 'LICENSE' will not be uploaded.
+        server-dir: public_html/
+        # 👇 This gives this repo a unique state file.
+        # This prevents it from deleting files managed by other repos.
+        state-name: .ftp-deploy-state-${{ github.repository }}.json
+        # 👇 This now correctly excludes only the files you don't want to upload.
         exclude: |
-          **
           README.md
           LICENSE
 
