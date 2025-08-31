@@ -280,6 +280,7 @@
         let soundsReady = false;
         const playerMoveSynth = new Tone.PolySynth(Tone.Synth, { oscillator: { type: 'sine' }, volume: -12, envelope: { attack: 0.01, decay: 0.1, sustain: 0, release: 0.1 } }).toDestination();
         const enemyMoveSynth = new Tone.Synth({ oscillator: { type: 'fatsawtooth' }, volume: -Infinity, envelope: { attack: 0.01, decay: 0.2, sustain: 0, release: 0.1 } }).toDestination();
+        const gemSynth = new Tone.PolySynth(Tone.Synth, { oscillator: { type: 'triangle' }, volume: -8 }).toDestination();
         const defeatSynth = new Tone.PolySynth(Tone.Synth, { oscillator: { type: 'sine' }, volume: -8 }).toDestination();
         const victorySynth = new Tone.Synth({ oscillator: { type: 'triangle' }, volume: -10 }).toDestination();
         const victoryPart = new Tone.Part((time, note) => {
@@ -302,13 +303,19 @@
             WALL: '\u{1F9F1}',
             PLAYER: '\u{1F3C3}',
             ENEMY: '\u{1F479}',
-            GOAL: '\u{1F7E9}'
+            GOAL: '\u{1F7E9}',
+            GEM: '\u{1F48E}',
+            CROWN: '\u{1F451}',
+            RING: '\u{1F48D}'
         };
 
         // --- Game State ---
         let MAZE;
         let player = { x: 1, y: 1 };
         let goal = { x: MAZE_WIDTH - 2, y: MAZE_HEIGHT - 2 };
+        let gem = { x: -1, y: -1, active: false };
+        let crown = { x: -1, y: -1, active: false };
+        let ring = { x: -1, y: -1, active: false };
         let enemies = [];
         let level = 1;
         let totalScore = 0;
@@ -445,6 +452,18 @@
                         else if (tile === 2) ctx.fillText(EMOJI_SET.GOAL, x, y);
                     }
                 }
+                // Draw gem
+                if (gem.active) {
+                    ctx.fillText(EMOJI_SET.GEM, gem.x * TILE_SIZE + offset, gem.y * TILE_SIZE + offset);
+                }
+                // Draw crown
+                if (crown.active) {
+                    ctx.fillText(EMOJI_SET.CROWN, crown.x * TILE_SIZE + offset, crown.y * TILE_SIZE + offset);
+                }
+                // Draw ring
+                if (ring.active) {
+                    ctx.fillText(EMOJI_SET.RING, ring.x * TILE_SIZE + offset, ring.y * TILE_SIZE + offset);
+                }
                 // Draw enemies
                 enemies.forEach(enemy => {
                     ctx.fillText(EMOJI_SET.ENEMY, enemy.x * TILE_SIZE + offset, enemy.y * TILE_SIZE + offset);
@@ -470,6 +489,39 @@
                         else continue;
                         ctx.fillRect(col * TILE_SIZE, row * TILE_SIZE, TILE_SIZE, TILE_SIZE);
                     }
+                }
+                // Draw gem
+                if (gem.active) {
+                    ctx.fillStyle = '#00ffff'; // cyan
+                    const x = gem.x * TILE_SIZE;
+                    const y = gem.y * TILE_SIZE;
+                    ctx.beginPath();
+                    ctx.moveTo(x + TILE_SIZE / 2, y);
+                    ctx.lineTo(x + TILE_SIZE, y + TILE_SIZE / 2);
+                    ctx.lineTo(x + TILE_SIZE / 2, y + TILE_SIZE);
+                    ctx.lineTo(x, y + TILE_SIZE / 2);
+                    ctx.closePath();
+                    ctx.fill();
+                }
+                // Draw crown
+                if (crown.active) {
+                    ctx.fillStyle = '#00ffff'; // cyan
+                    const x = crown.x * TILE_SIZE;
+                    const y = crown.y * TILE_SIZE;
+                    ctx.fillRect(x + TILE_SIZE * 0.2, y + TILE_SIZE * 0.7, TILE_SIZE * 0.6, TILE_SIZE * 0.2);
+                    ctx.fillRect(x + TILE_SIZE * 0.2, y + TILE_SIZE * 0.4, TILE_SIZE * 0.2, TILE_SIZE * 0.3);
+                    ctx.fillRect(x + TILE_SIZE * 0.4, y + TILE_SIZE * 0.2, TILE_SIZE * 0.2, TILE_SIZE * 0.5);
+                    ctx.fillRect(x + TILE_SIZE * 0.6, y + TILE_SIZE * 0.4, TILE_SIZE * 0.2, TILE_SIZE * 0.3);
+                }
+                // Draw ring
+                if (ring.active) {
+                    ctx.fillStyle = '#00ffff'; // cyan
+                    const x = ring.x * TILE_SIZE;
+                    const y = ring.y * TILE_SIZE;
+                    ctx.beginPath();
+                    ctx.arc(x + TILE_SIZE / 2, y + TILE_SIZE / 2, TILE_SIZE * 0.4, 0, 2 * Math.PI);
+                    ctx.arc(x + TILE_SIZE / 2, y + TILE_SIZE / 2, TILE_SIZE * 0.2, 0, 2 * Math.PI, true);
+                    ctx.fill();
                 }
                 // Draw enemies
                 ctx.fillStyle = '#ff4136';
@@ -646,6 +698,27 @@
             if (player.x === goal.x && player.y === goal.y) {
                 levelComplete();
             }
+
+            const collectibles = [
+                { item: gem, sound: ['G5', 'B5', 'D6'] },
+                { item: crown, sound: ['A5', 'C#6', 'E6'] },
+                { item: ring, sound: ['B5', 'D#6', 'F#6'] }
+            ];
+
+            let collectedSomething = false;
+            collectibles.forEach(collectible => {
+                if (collectible.item.active && player.x === collectible.item.x && player.y === collectible.item.y) {
+                    if(soundsReady) gemSynth.triggerAttackRelease(collectible.sound, '16n');
+                    totalScore += 200;
+                    collectible.item.active = false;
+                    collectedSomething = true;
+                }
+            });
+
+            if (collectedSomething) {
+                updateDisplays();
+                drawGame();
+            }
         }
         
         async function gameOver() {
@@ -716,6 +789,109 @@
             initialsModal.classList.add('hidden');
             winModal.classList.remove('hidden');
             updateDisplays();
+        }
+
+        function spawnCollectibles() {
+            gem.active = false;
+            crown.active = false;
+            ring.active = false;
+
+            const collectibles = [];
+            if (level >= 1) collectibles.push({ item: gem, type: 'gem' });
+            if (level >= 2) collectibles.push({ item: crown, type: 'crown' });
+            if (level >= 3) collectibles.push({ item: ring, type: 'ring' });
+
+            const midXStart = Math.floor(MAZE_WIDTH / 3);
+            const midXEnd = Math.floor(MAZE_WIDTH * 2 / 3);
+            const midYStart = Math.floor(MAZE_HEIGHT / 3);
+            const midYEnd = Math.floor(MAZE_HEIGHT * 2 / 3);
+            
+            const centerSpawns = [];
+            for (let r = midYStart; r <= midYEnd; r++) {
+                for (let c = midXStart; c <= midXEnd; c++) {
+                    if (MAZE[r][c] === 0) {
+                        centerSpawns.push({ x: c, y: r });
+                    }
+                }
+            }
+
+            const cornerQuadrants = {
+                topLeft: [], topRight: [], bottomLeft: [], bottomRight: []
+            };
+            
+            const midX = MAZE_WIDTH / 2;
+            const midY = MAZE_HEIGHT / 2;
+
+            for (let r = 1; r < MAZE_HEIGHT - 1; r++) {
+                for (let c = 1; c < MAZE_WIDTH - 1; c++) {
+                    if (MAZE[r][c] === 0) {
+                        if (r < midY && c < midX) cornerQuadrants.topLeft.push({ x: c, y: r });
+                        else if (r < midY && c > midX) cornerQuadrants.topRight.push({ x: c, y: r });
+                        else if (r > midY && c < midX) cornerQuadrants.bottomLeft.push({ x: c, y: r });
+                        else if (r > midY && c > midX) cornerQuadrants.bottomRight.push({ x: c, y: r });
+                    }
+                }
+            }
+
+            const getGoalQuadrant = () => {
+                if (goal.y < midY && goal.x < midX) return 'topLeft';
+                if (goal.y < midY && goal.x > midX) return 'topRight';
+                if (goal.y > midY && goal.x < midX) return 'bottomLeft';
+                return 'bottomRight';
+            };
+            
+            const goalQuadrant = getGoalQuadrant();
+            const availableQuadrants = Object.keys(cornerQuadrants).filter(q => q !== goalQuadrant);
+            
+            const spawnedLocations = [];
+
+            function getSpawnPoint(possibleSpawns) {
+                if (possibleSpawns.length === 0) return null;
+                
+                let spawnPoint = null;
+                let attempts = 0;
+                while(attempts < 20) {
+                    attempts++;
+                    const index = Math.floor(Math.random() * possibleSpawns.length);
+                    const candidate = possibleSpawns[index];
+                    
+                    let isDistant = true;
+                    for(const loc of spawnedLocations) {
+                        const dist = Math.abs(loc.x - candidate.x) + Math.abs(loc.y - candidate.y);
+                        if(dist < 10) {
+                            isDistant = false;
+                            break;
+                        }
+                    }
+
+                    if(isDistant) {
+                        spawnPoint = candidate;
+                        possibleSpawns.splice(index, 1);
+                        break;
+                    }
+                }
+                return spawnPoint;
+            }
+
+            collectibles.forEach(collectible => {
+                let spawnPoint = null;
+                if (collectible.type === 'gem') {
+                    spawnPoint = getSpawnPoint(centerSpawns);
+                } else {
+                    if(availableQuadrants.length > 0) {
+                        const quadrantIndex = Math.floor(Math.random() * availableQuadrants.length);
+                        const quadrantKey = availableQuadrants.splice(quadrantIndex, 1)[0];
+                        spawnPoint = getSpawnPoint(cornerQuadrants[quadrantKey]);
+                    }
+                }
+
+                if (spawnPoint) {
+                    collectible.item.x = spawnPoint.x;
+                    collectible.item.y = spawnPoint.y;
+                    collectible.item.active = true;
+                    spawnedLocations.push(spawnPoint);
+                }
+            });
         }
 
         function spawnEnemies() {
@@ -813,6 +989,7 @@
             
             updateDisplays();
             spawnEnemies();
+            spawnCollectibles();
             
             winModal.classList.add('hidden');
             gameOverModal.classList.add('hidden');
@@ -984,6 +1161,11 @@
             
             const oldPlayerPos = { ...player };
             const oldEnemyPositions = enemies.map(e => ({ ...e }));
+            const oldCollectibles = [
+                { item: gem, oldPos: gem.active ? { ...gem } : null },
+                { item: crown, oldPos: crown.active ? { ...crown } : null },
+                { item: ring, oldPos: ring.active ? { ...ring } : null },
+            ];
             const oldPlayerDistToGoal = getDistance(oldPlayerPos, goal);
             const oldEnemyDistancesToPlayer = oldEnemyPositions.map(e => getDistance(e, oldPlayerPos));
 
@@ -1023,6 +1205,27 @@
             MAZE = newMaze;
             player = newPlayerPos;
             enemies = newEnemyPositions;
+
+            // Relocate collectibles
+            const relocatedPositions = [];
+            oldCollectibles.forEach(collectible => {
+                if (collectible.oldPos) {
+                    const newPos = findSafeRelocationSpot(newMaze, collectible.oldPos, (pos) => {
+                        const isPlayer = pos.x === player.x && pos.y === player.y;
+                        const isEnemy = enemies.some(e => e.x === pos.x && e.y === pos.y);
+                        const isOtherCollectible = relocatedPositions.some(p => p.x === pos.x && p.y === pos.y);
+                        return !isPlayer && !isEnemy && !isOtherCollectible;
+                    });
+                    if (newPos) {
+                        collectible.item.x = newPos.x;
+                        collectible.item.y = newPos.y;
+                        collectible.item.active = true;
+                        relocatedPositions.push(newPos);
+                    } else {
+                        collectible.item.active = false;
+                    }
+                }
+            });
             
             drawGame();
             gameActive = true;
@@ -1122,4 +1325,3 @@
     
 </body>
 </html>
-
